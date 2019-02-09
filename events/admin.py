@@ -27,6 +27,7 @@ class ParticipantAdminForm(forms.ModelForm):
 
 class ParticipantAdmin(admin.ModelAdmin):
     form = ParticipantAdminForm
+    list_display = ['name', 'participation_code']
 
 
 admin.site.register(Participant, ParticipantAdmin)
