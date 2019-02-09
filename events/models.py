@@ -1,6 +1,7 @@
 from django.urls import reverse
 from django.conf import settings
-from django.db.models.signals import pre_save
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 from django.db import models as models
 from django_extensions.db import fields as extension_fields
 from . import utils
@@ -94,10 +95,11 @@ class Participant(models.Model):
         on_delete=models.CASCADE,
         related_name="event"
     )
-    participation_code = models.CharField(
-        max_length=4,
-        blank=True, null=True
-    )
+    participation_code = extension_fields.RandomCharField(
+        length=4,
+        lowercase=True,
+        unique=True
+        )
     university = models.CharField(
         max_length=50,
         blank=True, null=True,
@@ -127,7 +129,8 @@ class Participant(models.Model):
     campaigner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name="campaigner"
+        related_name="campaigner",
+        blank=True, null=True
     )
 
     class Meta:
@@ -147,28 +150,17 @@ class Participant(models.Model):
         return reverse('events_participant_update', args=(self.pk,))
 
 
-def pre_save_create_participation_code(sender, instance, *args, **kwargs):
+@receiver(post_save, sender=Participant, dispatch_uid="generate_qr_code")
+def generate_qr_code(sender, instance, **kwargs):
     qr = qrcode.QRCode(
         version=1,
         error_correction=qrcode.constants.ERROR_CORRECT_H,
         box_size=10,
         border=4,
     )
-    participation_code_g = utils.generate_participation_code()
-    culprit = Participant.objects.filter(
-        participation_code=participation_code_g
-    )
-    if not instance.participation_code:
-        while culprit:
-            participation_code_g = utils.generate_participation_code()
-        instance.participation_code = participation_code_g
-
-    qr.add_data(participation_code_g)
+    qr.add_data(instance.participation_code)
     img = qr.make_image(fill_color="black", back_color="white")
     img.save("qrcodes/{}_{}.png".format(
-        instance.event.name, participation_code_g
+        instance.event.name, instance.participation_code
         )
     )
-
-
-pre_save.connect(pre_save_create_participation_code, sender=Participant)
